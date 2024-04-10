@@ -1,14 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" 
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" 
-    integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" 
-    crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
     <title>Главная</title>
+    <style>
+        .chatbox {
+            outline: 1px solid darkblue;
+            min-height: 160px;
+            padding: 0.5em;
+        }
+    </style>
 </head>
+
 <body>
     <div class="container">
         <div class="row">
@@ -20,25 +27,143 @@
         <div class="row">
             <div class="col-md-8">
                 <h3>Chat</h3>
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" name="username" id="username" class="form-control" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="message">Message:</label>
+                    <input type="text" name="message" id="message" class="form-control" autocomplete="off">
+                </div>
+
+                <hr>
+                <a href="javascript:void(0);" class="btn btn-outline-secondary" id="sendBtn">Send Message</a>
+                <input type="hidden" name="action" id="action">
+                <hr>
+
+                <div id="output" class="chatbox">
+
+                </div>
             </div>
             <div class="col-md-4">
                 <h3>Online list</h3>
+                <ul id="userOnlineList"></ul>
             </div>
         </div>
     </div>
 </body>
-<script 
-src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" 
-integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+" 
-crossorigin="anonymous"></script>
 <script>
     let socket = null;
-    document.addEventListener("DOMContentLoaded", function(){
+    let chat = document.getElementById("output");
+    let userName = document.getElementById("username");
+    let msg = document.getElementById("message");
+    let msgBtn = document.getElementById("sendBtn")
+
+    window.onbeforeunload = function () {
+        console.log("Leaving")
+        let jsonData = {};
+        jsonData["action"] = "left";
+        socket.send(JSON.stringify(jsonData));
+
+    }
+    document.addEventListener("DOMContentLoaded", function () {
         socket = new WebSocket("ws://127.0.0.1:8080/ws")
 
         socket.onopen = () => {
             console.log("Successfully connected")
         }
+
+        socket.close = () => {
+            console.log("Session closed")
+        }
+
+        socket.onerror = error => {
+            console.log("ERROR")
+        }
+
+        socket.onmessage = msg => {
+            let data = JSON.parse(msg.data);
+            console.log("Action is", data.action)
+
+            switch (data.action) {
+                case "list_users":
+                    let ul = document.getElementById("userOnlineList");
+                    while (ul.firstChild) ul.removeChild(ul.firstChild);
+
+                    if (data.connectedUsers.length > 0) {
+                        data.connectedUsers.forEach(function (item) {
+                            let li = document.createElement("li");
+                            li.appendChild(document.createTextNode(item))
+                            ul.appendChild(li)
+                        })
+                    }
+                    break;
+
+                case "broadcast":
+                    chat.innerHTML = chat.innerHTML + data.message + "<br>"
+                    break
+            };
+        }
+
+
+
+        userName.addEventListener("change", function () {
+            let jsonData = {};
+            jsonData["action"] = "username";
+            jsonData["username"] = this.value;
+            socket.send(JSON.stringify(jsonData));
+        })
+
+        msg.addEventListener("keydown", function (event) {
+            if (event.code === "Enter") {
+                if (!socket) {
+                    console.log("no connection");
+                    return false
+                }
+                else if (checkField())
+                {
+                event.preventDefault();
+                event.stopPropagation();
+                sendMessage();
+                }
+            }
+        })
+
+        msgBtn.addEventListener("click", function () {
+            if (checkField()){
+                sendMessage()
+            }
+        })
+        
     })
+
+    function sendMessage() {
+        console.log("send message")
+        let jsonData = {};
+        jsonData["action"] = "broadcast";
+        jsonData["username"] = userName.value;
+        jsonData["message"] = msg.value;
+        socket.send(JSON.stringify(jsonData))
+        msg.value = "";
+    }
+
+    function checkField(){
+        if (userName.value === "")
+        {
+            alert("Fill name is null")
+            return false
+        }
+        else if(msg.value === "")
+        {
+            alert("Fill message is null")
+            return false
+        }
+        else
+        {
+            return true
+        }
+    }
 </script>
+
 </html>
